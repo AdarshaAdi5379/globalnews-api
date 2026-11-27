@@ -40,14 +40,20 @@ curl "https://<worker-host>/api/v2/doc/doc?query=sourcelang:english%20sourcecoun
 
 ## Use from the Android app
 
-The app builds GDELT URLs in `GdeltQueryBuilder.BASE_URL`. To route through this proxy, point
-that constant at the worker origin, e.g.:
+The app already supports this. It exposes a single switch, `ServiceLocator.PROXY_BASE_URL`. Set
+it to this worker's DOC endpoint and the feed is fetched through the proxy **first**, with
+direct GDELT as an automatic fallback (so a slow/down backend never breaks the feed):
 
 ```kotlin
-const val BASE_URL = "https://<worker-host>/api/v2/doc/doc"
+private const val PROXY_BASE_URL = "https://<worker-host>/api/v2/doc/doc"
 ```
 
-Everything else (query building, parsing, throttle, cache fallback) keeps working unchanged.
+Leave it blank (`""`) to call GDELT directly. No other app code changes are needed — query
+building, parsing, throttling and the on-device cache fallback all keep working.
+
+> **Privacy:** once `PROXY_BASE_URL` is set, the user's country and interest-derived search
+> terms are sent to this worker (and thus through Cloudflare). Update the privacy policy and the
+> Play Data Safety form to disclose this before shipping with the proxy enabled.
 
 ## Develop / test
 
