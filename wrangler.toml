@@ -2,3 +2,14 @@ name = "globalnews-api"
 main = "src/index.js"
 compatibility_date = "2026-01-01"
 workers_dev = true
+
+# Cron warmer: one query per minute, rotating (see WARM_QUERIES in src/index.js).
+[triggers]
+crons = ["* * * * *"]
+
+# Global cache. Create the namespace, then paste its id here:
+#   npx wrangler kv namespace create FEED_KV
+# Without this binding the worker still runs, using the per-colo Cache API instead.
+# [[kv_namespaces]]
+# binding = "FEED_KV"
+# id = "<paste-namespace-id>"

@@ -130,3 +130,90 @@ test("does not cache non-JSON / 429 responses", async () => {
     restore();
   }
 });
+
+function makeKV() {
+  const store = new Map();
+  return {
+    store,
+    async get(key, type) {
+      const v = store.get(key);
+      if (v === undefined) return null;
+      return type === "json" ? JSON.parse(v) : v;
+    },
+    async put(key, value) {
+      store.set(key, value);
+    },
+  };
+}
+
+const DOC_URL = DOC + "?query=sourcelang:english&mode=artlist&format=json&maxrecords=5&sort=datedesc";
+
+test("health reports kv backend when FEED_KV is bound", async () => {
+  const restore = installGlobals({ fetchImpl: () => { throw new Error("no fetch"); }, cache: makeCache() });
+  try {
+    const res = await worker.fetch(new Request("https://api.test/health"), { FEED_KV: makeKV() }, makeCtx());
+    assert.equal((await res.json()).cache, "kv");
+  } finally {
+    restore();
+  }
+});
+
+test("KV path caches 200: MISS stores, then KV-HIT without a second upstream fetch", async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response(JSON.stringify({ articles: [{ url: "https://e/1" }] }), { status: 200 });
+  };
+  const restore = installGlobals({ fetchImpl, cache: makeCache() });
+  try {
+    const env = { FEED_KV: makeKV() };
+    const ctx = makeCtx();
+    const r1 = await worker.fetch(new Request(DOC_URL), env, ctx);
+    await Promise.all(ctx.pending);
+    assert.equal(r1.headers.get("X-Cache"), "MISS");
+    assert.equal((await r1.json()).articles.length, 1);
+
+    const r2 = await worker.fetch(new Request(DOC_URL), env, makeCtx());
+    assert.equal(r2.headers.get("X-Cache"), "KV-HIT");
+    assert.equal((await r2.json()).articles.length, 1);
+    assert.equal(calls, 1, "second request must come from KV");
+  } finally {
+    restore();
+  }
+});
+
+test("KV path does not store 429", async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response("Please limit requests", { status: 429 });
+  };
+  const restore = installGlobals({ fetchImpl, cache: makeCache() });
+  try {
+    const env = { FEED_KV: makeKV() };
+    const ctx = makeCtx();
+    const r1 = await worker.fetch(new Request(DOC_URL), env, ctx);
+    await Promise.all(ctx.pending);
+    assert.equal(r1.status, 429);
+    assert.equal(env.FEED_KV.store.size, 0, "429 must not be written to KV");
+
+    await worker.fetch(new Request(DOC_URL), env, makeCtx());
+    assert.equal(calls, 2);
+  } finally {
+    restore();
+  }
+});
+
+test("cron warmer stores a 200 response in KV", async () => {
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ articles: [{ url: "https://e/1" }] }), { status: 200 });
+  const restore = installGlobals({ fetchImpl, cache: makeCache() });
+  try {
+    const kv = makeKV();
+    await worker.scheduled({ scheduledTime: 0 }, { FEED_KV: kv }, makeCtx());
+    assert.equal(kv.store.size, 1, "cron should warm one query into KV");
+  } finally {
+    restore();
+  }
+});
+

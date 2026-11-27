@@ -73,6 +73,25 @@ npx wrangler deploy                 # permanent workers.dev deploy
 npx wrangler deploy --temporary     # throwaway preview URL (no login, expires)
 ```
 
+### Enable the global KV cache + cron warmer (recommended)
+
+Without KV the worker still runs on the per-colo Cache API. To get one **global** cache and
+an always-warm feed:
+
+```bash
+npx wrangler kv namespace create FEED_KV        # prints an id
+```
+
+Paste the id into `wrangler.toml` (uncomment the `[[kv_namespaces]]` block), then:
+
+```bash
+npx wrangler deploy
+```
+
+The `[triggers]` cron (`* * * * *`) pre-fetches one query per minute in rotation from
+`WARM_QUERIES` in `src/index.js`, so default-query users always hit a warm cache. Edit that
+list to match the countries/heavy queries you actually serve.
+
 ## Security notes
 
 - **GET only**, single fixed upstream origin — not an open proxy.
@@ -81,7 +100,10 @@ npx wrangler deploy --temporary     # throwaway preview URL (no login, expires)
 
 ## Limitations / next steps
 
-- Cache is per-colo (`caches.default`), so it is regional rather than globally shared. For a
-  single global fetch per query, back it with a KV namespace.
+- Only **200 JSON** is cached; 429s and errors are never cached (so a rate-limited upstream is
+  retried, not memoized).
+- The cron warmer only helps queries it can predict (default / no-interest users). Personalized
+  queries carry interest terms and get their own cache entry per unique tuple, so cross-user
+  sharing is limited to identical (country, language, interests) combinations.
 - No per-client rate limiting yet (add KV or Durable Objects if abuse becomes a concern).
 - GDELT attribution ("GDELT Project" + link) must be preserved wherever the data is shown.
