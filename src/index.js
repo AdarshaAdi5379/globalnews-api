@@ -109,7 +109,6 @@ async function handle(request, env, ctx) {
         "User-Agent": "globalnews-api/1.0 (Cloudflare Worker)",
         Accept: "application/json",
       },
-      cf: { cacheTtl: CACHE_TTL_SECONDS, cacheEverything: false },
     });
   } catch (err) {
     return jsonResponse(
