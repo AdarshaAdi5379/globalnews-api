@@ -1,0 +1,16 @@
+{
+  "name": "globalnews-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cached GDELT proxy for the GlobalNews Android app (Cloudflare Worker).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test",
+    "live-check": "node scripts/live-check.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
